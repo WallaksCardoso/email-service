@@ -1,77 +1,96 @@
-# email-service
+# Email Service
 
-Serviço responsável por consumir eventos do Kafka e enviar e-mails de notificação.
+Microsserviço que consome eventos do Kafka e envia e-mails de notificação quando um jogador é
+cadastrado no sistema da pelada.
 
-## Tecnologias Utilizadas
+[![CI](https://github.com/WallaksCardoso/email-service/actions/workflows/ci.yml/badge.svg)](https://github.com/WallaksCardoso/email-service/actions/workflows/ci.yml)
+![Java](https://img.shields.io/badge/Java-21-informational)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5-informational)
+[![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-informational)](LICENSE)
 
-- Java 21  
-- Spring Boot 3.5.0  
-- Spring for Apache Kafka  
-- Spring Boot Starter Mail  
-- Maven  
+## Sobre
 
-## Configuração do Ambiente
-
-### Pré-requisitos
-
-- Java 21 instalado  
-- Maven instalado  
-- Docker (opcional, para rodar Kafka e Mailtrap)  
-
-### Configuração de Propriedades
-
-No arquivo `src/main/resources/application.properties`, configure as propriedades do Kafka e do servidor SMTP:
-
-```properties
-# Kafka
-spring.kafka.bootstrap-servers=localhost:9092
-spring.kafka.consumer.group-id=email-group
-spring.kafka.consumer.auto-offset-reset=earliest
-spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-
-# SMTP (exemplo com Mailtrap)
-spring.mail.host=smtp.mailtrap.io
-spring.mail.port=2525
-spring.mail.username=SEU_USUARIO_MAILTRAP
-spring.mail.password=SUA_SENHA_MAILTRAP
-spring.mail.properties.mail.smtp.auth=true
-spring.mail.properties.mail.smtp.starttls.enable=true
-```
-
-> Substitua `SEU_USUARIO_MAILTRAP` e `SUA_SENHA_MAILTRAP` com suas credenciais reais do [Mailtrap.io](https://mailtrap.io).
-
----
+Quando um jogador entra em um sorteio no [pelada-gestao](https://github.com/WallaksCardoso/pelada-gestao),
+a API publica um evento no tópico `jogador-evento` (se `pelada.kafka.enabled=true`). Este serviço
+escuta o tópico, monta a mensagem e envia o e-mail para o endereço de notificação configurado no
+sorteio. A API não espera o envio: a notificação é assíncrona e uma falha no SMTP não afeta o cadastro.
 
 ## Funcionalidades
 
-- Consome eventos de cadastro de jogadores via Kafka  
-- Envia e-mails de notificação
+- Consumo do tópico `jogador-evento` (grupo `email-service`)
+- Montagem do e-mail com nome do jogador, se é goleiro, data de cadastro e sorteio
+- Envio por SMTP (testado com o sandbox do Mailtrap)
+- Eventos inválidos são registrados no log sem derrubar o consumidor
 
-## Observações
+Exemplo de evento:
 
-- Certifique-se de que o Kafka e o Mailtrap estejam em execução e configurados corretamente.  
-- As configurações de destinatário e layout do e-mail podem ser ajustadas conforme a necessidade.
-
----
-
-## Build e Execução
-
-### Para compilar o projeto:
-
-```bash
-mvn clean install
+```json
+{
+  "nomeJogador": "Carlos",
+  "goleiro": true,
+  "dataCadastro": "2026-05-10",
+  "nomeSorteio": "Pelada de quinta",
+  "emailNotificacao": "notificacoes@exemplo.com"
+}
 ```
 
-### Para rodar a aplicação localmente:
+## Stack
+
+- Java 21 e Spring Boot 3.5
+- Spring for Apache Kafka
+- Spring Boot Starter Mail
+- Maven, Docker e GitHub Actions
+
+## Como rodar
+
+Pré-requisitos: Java 21, um Kafka acessível e uma conta SMTP (o
+[Mailtrap](https://mailtrap.io) tem um sandbox gratuito).
+
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Endereço do Kafka |
+| `MAIL_HOST` | `sandbox.smtp.mailtrap.io` | Servidor SMTP |
+| `MAIL_PORT` | `2525` | Porta SMTP |
+| `MAIL_USERNAME` | | Usuário SMTP |
+| `MAIL_PASSWORD` | | Senha SMTP |
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
-### Ou via Docker:
+Com Docker:
 
 ```bash
 docker build -t email-service .
-docker run -p 8081:8081 email-service
+docker run -p 8081:8081 \
+  -e KAFKA_BOOTSTRAP_SERVERS=... -e MAIL_USERNAME=... -e MAIL_PASSWORD=... \
+  email-service
 ```
+
+O serviço sobe na porta 8081.
+
+## Testes
+
+```bash
+./mvnw verify
+```
+
+Os testes do consumidor rodam sem Kafka nem SMTP: conferem o e-mail montado a partir do evento e
+que um evento inválido não dispara envio. A CI roda os testes e monta a imagem Docker a cada push.
+
+## Estrutura
+
+```
+src/main/java/com/pelada/email_service/
+  event/     formato do evento recebido
+  kafka/     consumidor do tópico
+  service/   envio do e-mail
+```
+
+## Projetos relacionados
+
+- [pelada-gestao](https://github.com/WallaksCardoso/pelada-gestao): API que publica os eventos
+
+## Licença
+
+[MIT](LICENSE)
