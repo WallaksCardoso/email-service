@@ -1,5 +1,6 @@
 package com.pelada.email_service.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pelada.email_service.event.JogadorCadastradoEvent;
 import com.pelada.email_service.service.EmailService;
@@ -19,34 +20,35 @@ public class KafkaEmailListener {
 
     @KafkaListener(topics = "jogador-evento", groupId = "email-service")
     public void consumirEvento(ConsumerRecord<String, String> record) {
+        JogadorCadastradoEvent event;
         try {
-            JogadorCadastradoEvent event = objectMapper.readValue(record.value(), JogadorCadastradoEvent.class);
-
-            String assunto = "Novo Jogador Cadastrado: " + event.getNomeJogador();
-            String corpo = String.format("""
-                            Olá,
-                            
-                            Um novo jogador foi cadastrado:
-                            
-                            Nome: %s
-                            Goleiro: %s
-                            Data de Cadastro: %s
-                            Sorteio: %s
-                            
-                            Att,
-                            Sistema Pelada
-                            """,
-                    event.getNomeJogador(),
-                    event.isGoleiro() ? "Sim" : "Não",
-                    event.getDataCadastro(),
-                    event.getNomeSorteio()
-            );
-
-            emailService.enviar(event.getEmailNotificacao(), assunto, corpo);
-            log.info("Email enviado com sucesso para jogador {}", event.getNomeJogador());
-
-        } catch (Exception e) {
-            log.error("Erro ao processar evento: {}", e.getMessage(), e);
+            event = objectMapper.readValue(record.value(), JogadorCadastradoEvent.class);
+        } catch (JsonProcessingException e) {
+            log.error("Evento inválido descartado: {}", e.getOriginalMessage());
+            return;
         }
+
+        String assunto = "Novo Jogador Cadastrado: " + event.getNomeJogador();
+        String corpo = String.format("""
+                        Olá,
+
+                        Um novo jogador foi cadastrado:
+
+                        Nome: %s
+                        Goleiro: %s
+                        Data de Cadastro: %s
+                        Sorteio: %s
+
+                        Att,
+                        Sistema Pelada
+                        """,
+                event.getNomeJogador(),
+                event.isGoleiro() ? "Sim" : "Não",
+                event.getDataCadastro(),
+                event.getNomeSorteio()
+        );
+
+        emailService.enviar(event.getEmailNotificacao(), assunto, corpo);
+        log.info("Email enviado com sucesso para jogador {}", event.getNomeJogador());
     }
 }

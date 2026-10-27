@@ -20,7 +20,9 @@ sorteio. A API não espera o envio: a notificação é assíncrona e uma falha n
 - Consumo do tópico `jogador-evento` (grupo `email-service`)
 - Montagem do e-mail com nome do jogador, se é goleiro, data de cadastro e sorteio
 - Envio por SMTP (testado com o sandbox do Mailtrap)
-- Eventos inválidos são registrados no log sem derrubar o consumidor
+- Falha no envio é tentada de novo (3 vezes, com 5 segundos entre elas); se continuar falhando, o
+  evento vai para o tópico `jogador-evento.DLT` em vez de se perder
+- Eventos com JSON inválido são registrados no log e descartados, sem novas tentativas
 
 Exemplo de evento:
 
@@ -53,6 +55,8 @@ Pré-requisitos: Java 21, um Kafka acessível e uma conta SMTP (o
 | `MAIL_PORT` | `2525` | Porta SMTP |
 | `MAIL_USERNAME` | | Usuário SMTP |
 | `MAIL_PASSWORD` | | Senha SMTP |
+| `EMAIL_RETENTATIVAS` | `3` | Novas tentativas antes de mandar para o tópico de erro |
+| `EMAIL_INTERVALORETENTATIVAMS` | `5000` | Intervalo entre as tentativas, em milissegundos |
 
 ```bash
 ./mvnw spring-boot:run
@@ -75,13 +79,14 @@ O serviço sobe na porta 8081.
 ./mvnw verify
 ```
 
-Os testes do consumidor rodam sem Kafka nem SMTP: conferem o e-mail montado a partir do evento e
-que um evento inválido não dispara envio. A CI roda os testes e monta a imagem Docker a cada push.
+Os testes do consumidor rodam sem Kafka nem SMTP: conferem o e-mail montado a partir do evento, que um
+evento inválido não dispara envio e que a falha no SMTP é devolvida ao Kafka para nova tentativa. A CI roda os testes e monta a imagem Docker a cada push.
 
 ## Estrutura
 
 ```
 src/main/java/com/pelada/email_service/
+  config/    novas tentativas e tópico de erro
   event/     formato do evento recebido
   kafka/     consumidor do tópico
   service/   envio do e-mail
